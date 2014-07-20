@@ -1,0 +1,69 @@
+Test API Ariston
+
+
+
+{"code":"A786", "shade":"14","quantity":"20"} caso 4.3
+{"code":"A001", "shade":"1","quantity":"20"} caso 1
+{"code":"A783", "shade":"18","quantity":"10"} caso 2
+{"code":"A785", "shade":"13","quantity":"13"} caso 5
+
+
+//carica gli ordini nella tabella formattando le date per i rispettivi campi
+LOAD DATA LOCAL INFILE '/Users/riccardo/Downloads/ordini.csv' REPLACE INTO TABLE `ordini` 
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"' 
+ESCAPED BY '\\' 
+LINES TERMINATED BY '\n' 
+IGNORE 2 LINES
+(articolo, variante, quantita, @var1, @var2)
+set data_evasione = STR_TO_DATE(@var1, '%d/%m/%Y'), ritardo = STR_TO_DATE(@var2, '%d/%m/%Y')
+
+
+LOAD DATA LOCAL INFILE '/Users/riccardo/Downloads/esistenza.csv' REPLACE INTO TABLE `esistenza` 
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"' 
+ESCAPED BY '\\' 
+LINES TERMINATED BY '\n' 
+IGNORE 2 LINES 
+
+
+LOAD DATA LOCAL INFILE '/Users/riccardo/Downloads/alternativi.csv' REPLACE INTO TABLE `alternativi` 
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"' 
+ESCAPED BY '\\' 
+LINES TERMINATED BY '\r\n';
+
+//la view stock è quella su cui si interroga con le api
+create or replace ALGORITHM = MERGE view view_stock as
+select a.articolo, a.variante, a.disponibilita, a.dispimmediata, a.esistenza, b.data_ordine, c.alt_code, c.alt_shade
+from test.esistenza as a
+left join view_ordini as b on a.articolo = b.articolo and a.variante = b.variante 
+left join alternativi as c on a.articolo = c.code and a.variante = c.shade
+order by a.articolo, a.variante ASC;
+
+//La view ordini restituisce la data minima di arrivo 
+create view view_ordini as
+SELECT articolo, variante, count(*),
+date_format(min(CASE WHEN ritardo = '0000-00-00' THEN data_evasione ELSE ritardo END),'%d-%m-%Y') as data_ordine from test.ordini
+group by articolo, variante;
+
+
+
+//restituisce la data minima senza e con la formattazione della data
+SELECT articolo, variante, count(*),
+min(CASE WHEN ritardo = '0000-00-00' THEN data_evasione ELSE ritardo END) from test.ordini
+group by articolo, variante;
+
+SELECT articolo, variante, count(*),
+date_format(min(CASE WHEN ritardo = '0000-00-00' THEN data_evasione ELSE ritardo END),'%d-%m-%Y') from test.ordini
+group by articolo, variante;
+
+//OTTIMA per ottenere l'incrocio tra ordini ed esistenza
+select a.articolo, a.variante, b.data_ordine from test.esistenza as a left join 
+(
+SELECT articolo, variante, count(*),
+date_format(min(CASE WHEN ritardo = '0000-00-00' THEN data_evasione ELSE ritardo END),'%d-%m-%Y') as data_ordine from test.ordini
+group by articolo, variante 
+) as b on a.articolo = b.articolo and a.variante = b.variante limit 0, 6000
+
+

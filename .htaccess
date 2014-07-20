@@ -1,0 +1,4 @@
+RewriteEngine on
+RewriteBase /api/
+RewriteCond $1 !^(index\.php|images|robots\.txt|assets|uploads)
+RewriteRule ^(.*)$ index.php/$1 [L]
